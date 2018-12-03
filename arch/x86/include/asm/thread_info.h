@@ -12,6 +12,7 @@
 #include <asm/page.h>
 #include <asm/percpu.h>
 #include <asm/types.h>
+#include <asm/ptrace.h>
 
 /*
  * TOP_OF_KERNEL_STACK_PADDING is a number of unused bytes that we
@@ -56,11 +57,15 @@ struct task_struct;
 struct thread_info {
 	unsigned long		flags;		/* low level flags */
 	u32			status;		/* thread synchronous flags */
+	atomic_t		await_switch;
+	struct pt_regs		previous_user;  /* saved user registers from previous over-written state*/
+	struct pt_regs		next_user;      /* state to override the current user state once the thread returns to usermode*/
 };
 
 #define INIT_THREAD_INFO(tsk)			\
 {						\
 	.flags		= 0,			\
+	.await_switch   = 0			\
 }
 
 #define init_stack		(init_thread_union.stack)
@@ -128,7 +133,6 @@ struct thread_info {
 #define _TIF_ADDR32		(1 << TIF_ADDR32)
 #define _TIF_X32		(1 << TIF_X32)
 #define _TIF_FSCHECK		(1 << TIF_FSCHECK)
-
 /*
  * work to do in syscall_trace_enter().  Also includes TIF_NOHZ for
  * enter_from_user_mode()

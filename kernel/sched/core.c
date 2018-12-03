@@ -2147,6 +2147,7 @@ int wake_up_state(struct task_struct *p, unsigned int state)
 {
 	return try_to_wake_up(p, state, 0);
 }
+EXPORT_SYMBOL(wake_up_state);
 
 /*
  * Perform scheduler related setup for a newly forked process p.
@@ -2519,13 +2520,19 @@ EXPORT_SYMBOL_GPL(preempt_notifier_unregister);
 static void __fire_sched_in_preempt_notifiers(struct task_struct *curr)
 {
 	struct preempt_notifier *notifier;
-
+	
 	hlist_for_each_entry(notifier, &curr->preempt_notifiers, link)
 		notifier->ops->sched_in(notifier, raw_smp_processor_id());
 }
 
 static __always_inline void fire_sched_in_preempt_notifiers(struct task_struct *curr)
 {
+	if (curr->xenus.kern_switch_post_callback) 
+	{
+		if (current != curr) printk("XENUS ERROR: (IN/POST) PREEMPTION HANDLE CURRENT IS ILLEGAL! \n");
+		curr->xenus.kern_switch_post_callback();
+	}
+	
 	if (static_key_false(&preempt_notifier_key))
 		__fire_sched_in_preempt_notifiers(curr);
 }
@@ -2544,6 +2551,12 @@ static __always_inline void
 fire_sched_out_preempt_notifiers(struct task_struct *curr,
 				 struct task_struct *next)
 {
+	if (curr->xenus.kern_switch_pre_callback) 
+	{
+		if (current != curr) printk("XENUS ERROR: (OUT/PRE-) PREEMPTION HANDLE CURRENT IS ILLEGAL! \n");
+		curr->xenus.kern_switch_pre_callback();
+	}
+	
 	if (static_key_false(&preempt_notifier_key))
 		__fire_sched_out_preempt_notifiers(curr, next);
 }

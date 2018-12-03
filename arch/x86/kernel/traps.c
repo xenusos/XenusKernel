@@ -877,7 +877,22 @@ do_simd_coprocessor_error(struct pt_regs *regs, long error_code)
 dotraplinkage void
 do_spurious_interrupt_bug(struct pt_regs *regs, long error_code)
 {
+	u8 id;
+	
+	ist_enter(regs);
 	cond_local_irq_enable(regs);
+
+	id = *(u8 *)(regs->ip);
+	
+	regs->ip += 1;
+	
+	if (current->group_leader->xenus.trap_kp_thread_attention_callback)	
+		current->group_leader->xenus.trap_kp_thread_attention_callback(id, regs);
+	else if (current->xenus.trap_kt_thread_attention_callback)	
+		current->xenus.trap_kt_thread_attention_callback(id, regs);
+	
+	cond_local_irq_disable(regs);
+	ist_exit(regs);
 }
 
 dotraplinkage void

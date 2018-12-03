@@ -28,6 +28,8 @@
 #include <linux/mm_types_task.h>
 #include <linux/task_io_accounting.h>
 
+#include <xenus/xenus.h>
+
 /* task_struct member predeclarations (sorted alphabetically): */
 struct audit_context;
 struct backing_dev_info;
@@ -523,6 +525,7 @@ struct task_struct {
 	 * must be the first element of task_struct.
 	 */
 	struct thread_info		thread_info;
+	thread_storage_data_t   xenus;
 #endif
 	/* -1 unrunnable, 0 runnable, >0 stopped: */
 	volatile long			state;

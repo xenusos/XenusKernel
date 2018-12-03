@@ -131,9 +131,21 @@ static long syscall_trace_enter(struct pt_regs *regs)
 	return ret ?: regs->orig_ax;
 }
 
-#define EXIT_TO_USERMODE_LOOP_FLAGS				\
+static void do_preempt_user(struct pt_regs * regs)
+{
+	memcpy(&current_thread_info()->previous_user, regs, sizeof(struct pt_regs));
+	memcpy(regs, &current_thread_info()->next_user, sizeof(struct pt_regs));
+	regs->orig_ax = current_thread_info()->previous_user.orig_ax;
+	regs->cs = current_thread_info()->previous_user.cs;
+	regs->ss = current_thread_info()->previous_user.ss;
+	regs->flags = current_thread_info()->previous_user.flags;
+	current_thread_info()->await_switch.counter = 0;
+}
+
+#define EXIT_TO_USERMODE_LOOP_FLAGS			\
 	(_TIF_SIGPENDING | _TIF_NOTIFY_RESUME | _TIF_UPROBE |	\
 	 _TIF_NEED_RESCHED | _TIF_USER_RETURN_NOTIFY | _TIF_PATCH_PENDING)
+
 
 static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
 {
@@ -157,6 +169,8 @@ static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
 		/* deal with pending signal delivery */
 		if (cached_flags & _TIF_SIGPENDING)
 			do_signal(regs);
+		else if (current_thread_info()->await_switch.counter)
+			do_preempt_user(regs);
 
 		if (cached_flags & _TIF_NOTIFY_RESUME) {
 			clear_thread_flag(TIF_NOTIFY_RESUME);
@@ -174,7 +188,7 @@ static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
 
 		cached_flags = READ_ONCE(current_thread_info()->flags);
 
-		if (!(cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS))
+		if (!((cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS) || (current_thread_info()->await_switch.counter)))
 			break;
 	}
 }
@@ -194,7 +208,7 @@ __visible inline void prepare_exit_to_usermode(struct pt_regs *regs)
 
 	cached_flags = READ_ONCE(ti->flags);
 
-	if (unlikely(cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS))
+	if (unlikely((cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS) || (current_thread_info()->await_switch.counter)))
 		exit_to_usermode_loop(regs, cached_flags);
 
 #ifdef CONFIG_COMPAT

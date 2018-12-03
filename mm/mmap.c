@@ -2718,10 +2718,9 @@ int do_munmap(struct mm_struct *mm, unsigned long start, size_t len,
 	return 0;
 }
 
-int vm_munmap(unsigned long start, size_t len)
+int vm_munmap_ex(struct mm_struct *mm, unsigned long start, size_t len)
 {
 	int ret;
-	struct mm_struct *mm = current->mm;
 	LIST_HEAD(uf);
 
 	if (down_write_killable(&mm->mmap_sem))
@@ -2732,6 +2731,12 @@ int vm_munmap(unsigned long start, size_t len)
 	userfaultfd_unmap_complete(mm, &uf);
 	return ret;
 }
+
+int vm_munmap(unsigned long start, size_t len)
+{
+	return vm_munmap_ex(current->mm, start, len); 
+}
+EXPORT_SYMBOL(vm_munmap_ex);
 EXPORT_SYMBOL(vm_munmap);
 
 SYSCALL_DEFINE2(munmap, unsigned long, addr, size_t, len)
@@ -3334,6 +3339,8 @@ struct vm_area_struct *_install_special_mapping(
 	return __install_special_mapping(mm, addr, len, vm_flags, (void *)spec,
 					&special_mapping_vmops);
 }
+
+EXPORT_SYMBOL(_install_special_mapping);
 
 int install_special_mapping(struct mm_struct *mm,
 			    unsigned long addr, unsigned long len,

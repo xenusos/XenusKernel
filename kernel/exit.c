@@ -765,6 +765,8 @@ void __noreturn do_exit(long code)
 	struct task_struct *tsk = current;
 	int group_dead;
 
+	if (tsk->xenus.kern_thread_exit) tsk->xenus.kern_thread_exit(code);
+	
 	profile_task_exit(tsk);
 	kcov_task_exit(tsk);
 

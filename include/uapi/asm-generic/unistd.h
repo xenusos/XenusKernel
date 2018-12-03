@@ -16,6 +16,7 @@
 #define __SYSCALL(x, y)
 #endif
 
+
 #if __BITS_PER_LONG == 32 || defined(__SYSCALL_COMPAT)
 #define __SC_3264(_nr, _32, _64) __SYSCALL(_nr, _32)
 #else
@@ -40,6 +41,9 @@ __SC_COMP(__NR_io_submit, sys_io_submit, compat_sys_io_submit)
 __SYSCALL(__NR_io_cancel, sys_io_cancel)
 #define __NR_io_getevents 4
 __SC_COMP(__NR_io_getevents, sys_io_getevents, compat_sys_io_getevents)
+
+#define __NR_xenuscall 400
+__SYSCALL(__NR_xenuscall, sys_xenuscall);
 
 /* fs/xattr.c */
 #define __NR_setxattr 5

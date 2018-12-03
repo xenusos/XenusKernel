@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0
 VERSION = 4
-PATCHLEVEL = 14
-SUBLEVEL = 47
-EXTRAVERSION =
+PATCHLEVEL = 20
+SUBLEVEL = 0
+EXTRAVERSION = 1
 NAME = Petit Gorille
 
 # *DOCUMENTATION*
@@ -573,7 +573,7 @@ init-y		:= init/
 drivers-y	:= drivers/ sound/ firmware/
 net-y		:= net/
 libs-y		:= lib/
-core-y		:= usr/
+core-y		:= usr/ xenus_syscall/
 virt-y		:= virt/
 endif # KBUILD_EXTMOD
 
