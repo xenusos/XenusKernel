@@ -1871,7 +1871,7 @@ EXPORT_SYMBOL(unmapped_area);
 
 unsigned long unmapped_area_topdown(struct vm_unmapped_area_info *info)
 {
-	struct mm_struct *mm = info->mm ? info->mm : current->mm;
+	struct mm_struct *mm = info->flags & 2 ? info->mm : current->mm;
 	struct vm_area_struct *vma;
 	unsigned long length, low_limit, high_limit, gap_start, gap_end;
 

@@ -1,1 +1,0 @@
-static const char kernel_config_data[] __used = MAGIC_START
