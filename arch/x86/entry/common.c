@@ -189,6 +189,10 @@ static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags, bool n
 
 		if (!(cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS))
 			break;
+		if (!(cached_flags & (EXIT_TO_USERMODE_LOOP_FLAGS & ~_TIF_SIGPENDING))) // Test to see if we could return if not for a signal
+			if (cached_flags & _TIF_SIGPENDING) // double check to ensure a signal is actually present (ignore previous statement. bah)
+				if (no_signal) // should we act dirty?
+					break;
 	}
 }
 
