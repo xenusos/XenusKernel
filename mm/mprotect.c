@@ -390,14 +390,14 @@ fail:
 /*
  * pkey==-1 when doing a legacy mprotect()
  */
-static int do_mprotect_pkey(unsigned long start, size_t len,
+int do_mprotect_pkey(struct task_struct * task, unsigned long start, size_t len,
 		unsigned long prot, int pkey)
 {
 	unsigned long nstart, end, tmp, reqprot;
 	struct vm_area_struct *vma, *prev;
 	int error = -EINVAL;
 	const int grows = prot & (PROT_GROWSDOWN|PROT_GROWSUP);
-	const bool rier = (current->personality & READ_IMPLIES_EXEC) &&
+	const bool rier = (task->personality & READ_IMPLIES_EXEC) &&
 				(prot & PROT_READ);
 
 	prot &= ~(PROT_GROWSDOWN|PROT_GROWSUP);
@@ -417,7 +417,7 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 
 	reqprot = prot;
 
-	if (down_write_killable(&current->mm->mmap_sem))
+	if (down_write_killable(&task->mm->mmap_sem))
 		return -EINTR;
 
 	/*
@@ -425,10 +425,10 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 	 * them use it here.
 	 */
 	error = -EINVAL;
-	if ((pkey != -1) && !mm_pkey_is_allocated(current->mm, pkey))
+	if ((pkey != -1) && !mm_pkey_is_allocated(task->mm, pkey))
 		goto out;
 
-	vma = find_vma(current->mm, start);
+	vma = find_vma(task->mm, start);
 	error = -ENOMEM;
 	if (!vma)
 		goto out;
@@ -507,14 +507,15 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 		prot = reqprot;
 	}
 out:
-	up_write(&current->mm->mmap_sem);
+	up_write(&task->mm->mmap_sem);
 	return error;
 }
+EXPORT_SYMBOL(do_mprotect_pkey);
 
 SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
 		unsigned long, prot)
 {
-	return do_mprotect_pkey(start, len, prot, -1);
+	return do_mprotect_pkey(current, start, len, prot, -1);
 }
 
 #ifdef CONFIG_ARCH_HAS_PKEYS
@@ -522,10 +523,10 @@ SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
 SYSCALL_DEFINE4(pkey_mprotect, unsigned long, start, size_t, len,
 		unsigned long, prot, int, pkey)
 {
-	return do_mprotect_pkey(start, len, prot, pkey);
+	return do_mprotect_pkey(current, start, len, prot, pkey);
 }
 
-SYSCALL_DEFINE2(pkey_alloc, unsigned long, flags, unsigned long, init_val)
+int do_pkey_alloc(struct task_struct * task, unsigned long flags, unsigned long init_val) 
 {
 	int pkey;
 	int ret;
@@ -537,37 +538,49 @@ SYSCALL_DEFINE2(pkey_alloc, unsigned long, flags, unsigned long, init_val)
 	if (init_val & ~PKEY_ACCESS_MASK)
 		return -EINVAL;
 
-	down_write(&current->mm->mmap_sem);
-	pkey = mm_pkey_alloc(current->mm);
+	down_write(&task->mm->mmap_sem);
+	pkey = mm_pkey_alloc(task->mm);
 
 	ret = -ENOSPC;
 	if (pkey == -1)
 		goto out;
 
-	ret = arch_set_user_pkey_access(current, pkey, init_val);
+	ret = arch_set_user_pkey_access(task, pkey, init_val);
 	if (ret) {
-		mm_pkey_free(current->mm, pkey);
+		mm_pkey_free(task->mm, pkey);
 		goto out;
 	}
 	ret = pkey;
 out:
-	up_write(&current->mm->mmap_sem);
+	up_write(&task->mm->mmap_sem);
 	return ret;
 }
+EXPORT_SYMBOL(do_pkey_alloc);
 
-SYSCALL_DEFINE1(pkey_free, int, pkey)
+SYSCALL_DEFINE2(pkey_alloc, unsigned long, flags, unsigned long, init_val)
+{
+	return do_pkey_alloc(current, flags, init_val);
+}
+
+int do_pkey_free(struct task_struct * task, int pkey)
 {
 	int ret;
 
-	down_write(&current->mm->mmap_sem);
-	ret = mm_pkey_free(current->mm, pkey);
-	up_write(&current->mm->mmap_sem);
+	down_write(&task->mm->mmap_sem);
+	ret = mm_pkey_free(task->mm, pkey);
+	up_write(&task->mm->mmap_sem);
 
 	/*
 	 * We could provie warnings or errors if any VMA still
 	 * has the pkey set here.
 	 */
 	return ret;
+}
+EXPORT_SYMBOL(do_pkey_free);
+
+SYSCALL_DEFINE1(pkey_free, int, pkey)
+{
+	return do_pkey_free(current, pkey);
 }
 
 #endif /* CONFIG_ARCH_HAS_PKEYS */

@@ -147,7 +147,7 @@ static void do_preempt_user(struct pt_regs * regs)
 	 _TIF_NEED_RESCHED | _TIF_USER_RETURN_NOTIFY | _TIF_PATCH_PENDING)
 
 
-static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
+static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags, bool no_signal)
 {
 	/*
 	 * In order to return to user mode, we need to have IRQs off with
@@ -168,9 +168,8 @@ static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
 
 		/* deal with pending signal delivery */
 		if (cached_flags & _TIF_SIGPENDING)
-			do_signal(regs);
-		else if (current_thread_info()->await_switch.counter)
-			do_preempt_user(regs);
+			if (!no_signal) // you can fuck off and wait. we'll rekick the process later just in case.
+				do_signal(regs);
 
 		if (cached_flags & _TIF_NOTIFY_RESUME) {
 			clear_thread_flag(TIF_NOTIFY_RESUME);
@@ -188,7 +187,7 @@ static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
 
 		cached_flags = READ_ONCE(current_thread_info()->flags);
 
-		if (!((cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS) || (current_thread_info()->await_switch.counter)))
+		if (!(cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS))
 			break;
 	}
 }
@@ -196,6 +195,7 @@ static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
 /* Called with IRQs disabled. */
 __visible inline void prepare_exit_to_usermode(struct pt_regs *regs)
 {
+	bool nosignal;
 	struct thread_info *ti = current_thread_info();
 	u32 cached_flags;
 
@@ -208,8 +208,15 @@ __visible inline void prepare_exit_to_usermode(struct pt_regs *regs)
 
 	cached_flags = READ_ONCE(ti->flags);
 
-	if (unlikely((cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS) || (current_thread_info()->await_switch.counter)))
-		exit_to_usermode_loop(regs, cached_flags);
+	nosignal = false;
+	if (current_thread_info()->await_switch.counter)
+	{
+		do_preempt_user(regs);
+		nosignal = true;
+	}
+
+	if (unlikely(cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS))
+		exit_to_usermode_loop(regs, cached_flags, nosignal);
 
 #ifdef CONFIG_COMPAT
 	/*

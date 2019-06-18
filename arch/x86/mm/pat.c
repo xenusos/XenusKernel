@@ -716,6 +716,7 @@ out_free:
 out_err:
 	return ret;
 }
+EXPORT_SYMBOL(io_reserve_memtype);
 
 /**
  * io_free_memtype - Release a memory type mapping for a region of memory
@@ -726,6 +727,7 @@ void io_free_memtype(resource_size_t start, resource_size_t end)
 {
 	free_memtype(start, end);
 }
+EXPORT_SYMBOL(io_free_memtype);
 
 int arch_io_reserve_memtype_wc(resource_size_t start, resource_size_t size)
 {
@@ -825,6 +827,8 @@ int kernel_map_sync_memtype(u64 base, unsigned long size,
 	}
 	return 0;
 }
+EXPORT_SYMBOL(kernel_map_sync_memtype);
+
 
 /*
  * Internal interface to reserve a range of physical memory with prot.

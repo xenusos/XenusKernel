@@ -5,11 +5,11 @@
 
 #include "xenus_syscall.h"
 
-asmlinkage size_t  sys_xenuscall(uint8_t id, size_t a, size_t b, size_t c, size_t d)
+asmlinkage size_t  sys_xenuscall(uint8_t id, size_t a, size_t b, size_t c, size_t d , size_t e)
 {
 	if (current->group_leader->xenus.syscall_kp_attention_callback)	
-		return current->group_leader->xenus.syscall_kp_attention_callback(id, a, b, c, d);
+		return current->group_leader->xenus.syscall_kp_attention_callback(id, a, b, c, d, e);
 	else if (current->xenus.syscall_kt_attention_callback)	
-		return current->xenus.syscall_kt_attention_callback(id, a, b, c, d);
+		return current->xenus.syscall_kt_attention_callback(id, a, b, c, d, e);
 	return 0xDEAD01010101;
 }

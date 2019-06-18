@@ -398,7 +398,10 @@ union irq_stack_union {
 	 * 48 bytes of the irq stack for the canary.
 	 */
 	struct {
-		char gs_base[40];
+		union {
+			char gs_base[40];
+			char windows[0x194];
+		};
 		unsigned long stack_canary;
 	};
 };

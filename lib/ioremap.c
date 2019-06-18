@@ -181,3 +181,5 @@ int ioremap_page_range(unsigned long addr,
 
 	return err;
 }
+
+EXPORT_SYMBOL(ioremap_page_range);
