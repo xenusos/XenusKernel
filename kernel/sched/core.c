@@ -2670,9 +2670,9 @@ static struct rq *finish_task_switch(struct task_struct *prev)
 	finish_lock_switch(rq, prev);
 	finish_arch_post_lock_switch();
 
-	fire_sched_in_preempt_notifiers(current);
-	if (mm)
-		mmdrop(mm);
+	//fire_sched_in_preempt_notifiers(current);
+	//if (mm)
+	//	mmdrop(mm);
 	if (unlikely(prev_state == TASK_DEAD)) {
 		if (prev->sched_class->task_dead)
 			prev->sched_class->task_dead(prev);
@@ -2690,6 +2690,11 @@ static struct rq *finish_task_switch(struct task_struct *prev)
 	}
 
 	tick_nohz_task_switch();
+	
+	if (mm)
+		mmdrop(mm);
+
+	fire_sched_in_preempt_notifiers(current);	
 	return rq;
 }
 
