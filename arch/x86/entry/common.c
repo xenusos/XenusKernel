@@ -147,8 +147,9 @@ static void do_preempt_user(struct pt_regs * regs)
 	 _TIF_NEED_RESCHED | _TIF_USER_RETURN_NOTIFY | _TIF_PATCH_PENDING)
 
 
-static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags, bool no_signal)
+static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
 {
+	bool no_signal = false;
 	/*
 	 * In order to return to user mode, we need to have IRQs off with
 	 * none of EXIT_TO_USERMODE_LOOP_FLAGS set.  Several of these flags
@@ -165,6 +166,12 @@ static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags, bool n
 
 		if (cached_flags & _TIF_UPROBE)
 			uprobe_notify_resume(regs);
+
+		if (atomic_read(&current_thread_info()->await_switch))
+                {
+                        do_preempt_user(regs);
+                        no_signal = true;
+                }
 
 		/* deal with pending signal delivery */
 		if (cached_flags & _TIF_SIGPENDING)
@@ -189,6 +196,7 @@ static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags, bool n
 
 		if (!(cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS))
 			break;
+		
 		if (!(cached_flags & (EXIT_TO_USERMODE_LOOP_FLAGS & ~_TIF_SIGPENDING))) // Test to see if we could return if not for a signal
 			if (cached_flags & _TIF_SIGPENDING) // double check to ensure a signal is actually present (ignore previous statement. bah)
 				if (no_signal) // should we act dirty?
@@ -199,7 +207,6 @@ static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags, bool n
 /* Called with IRQs disabled. */
 __visible inline void prepare_exit_to_usermode(struct pt_regs *regs)
 {
-	bool nosignal;
 	struct thread_info *ti = current_thread_info();
 	u32 cached_flags;
 
@@ -212,15 +219,8 @@ __visible inline void prepare_exit_to_usermode(struct pt_regs *regs)
 
 	cached_flags = READ_ONCE(ti->flags);
 
-	nosignal = false;
-	if (current_thread_info()->await_switch.counter)
-	{
-		do_preempt_user(regs);
-		nosignal = true;
-	}
-
 	if (unlikely(cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS))
-		exit_to_usermode_loop(regs, cached_flags, nosignal);
+		exit_to_usermode_loop(regs, cached_flags);
 
 #ifdef CONFIG_COMPAT
 	/*

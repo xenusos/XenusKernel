@@ -468,6 +468,21 @@ void load_percpu_segment(int cpu)
 	load_stack_canary_segment();
 }
 
+
+int xenus_util_get_cpuid(void)
+{
+	return smp_processor_id();
+}
+
+unsigned long xenus_util_get_gs(int cpu)
+{
+	return (unsigned long)per_cpu(irq_stack_union.gs_base, cpu);
+}
+
+EXPORT_SYMBOL(xenus_util_get_cpuid);
+EXPORT_SYMBOL(xenus_util_get_gs);
+
+
 #ifdef CONFIG_X86_32
 /* The 32-bit entry code needs to find cpu_entry_area. */
 DEFINE_PER_CPU(struct cpu_entry_area *, cpu_entry_area);
