@@ -131,15 +131,38 @@ static long syscall_trace_enter(struct pt_regs *regs)
 	return ret ?: regs->orig_ax;
 }
 
+// 3.4 Process Initialization (table: 3.5)
+// x86-64-psABI-1.0
+#define FLAG_MASK_ABI 	((unsigned long)	\
+			(X86_EFLAGS_CF 	|	\
+			 X86_EFLAGS_DF	|	\
+			 X86_EFLAGS_PF	|	\
+			 X86_EFLAGS_AF	|	\
+			 X86_EFLAGS_ZF	| 	\
+			 X86_EFLAGS_SF	| 	\
+			 X86_EFLAGS_OF))
+
 static void do_preempt_user(struct pt_regs * regs)
 {
-	memcpy(&current_thread_info()->previous_user, regs, sizeof(struct pt_regs));
-	memcpy(regs, &current_thread_info()->next_user, sizeof(struct pt_regs));
-	regs->orig_ax = current_thread_info()->previous_user.orig_ax;
-	regs->cs = current_thread_info()->previous_user.cs;
-	regs->ss = current_thread_info()->previous_user.ss;
-	regs->flags = current_thread_info()->previous_user.flags;
-	current_thread_info()->await_switch.counter = 0;
+	struct thread_info *ti = current_thread_info();
+	
+	// back up the threads context to allow an APC handler to return to this point
+	memcpy(&ti->previous_user, regs, sizeof(struct pt_regs));
+	
+	// copy APC state into register context
+	memcpy(regs, &ti->next_user, sizeof(struct pt_regs));
+	
+	// restore critical registers we have no business modifying
+	regs->orig_ax = ti->previous_user.orig_ax; // syscall or something
+	regs->cs = ti->previous_user.cs; // segment
+	regs->ss = ti->previous_user.ss; // segment
+	
+	// copy 
+	regs->flags &= FLAG_MASK_ABI; // we only permit APCs to modify safe EFLAGs (zero flag, parity, sign flag, etc)
+	regs->flags |= ti->previous_user.flags & ~FLAG_MASK_ABI; // copy non-eflags from previous context
+
+	// reset 
+	atomic_set(&ti->await_switch, 0);
 }
 
 #define EXIT_TO_USERMODE_LOOP_FLAGS			\
@@ -149,7 +172,6 @@ static void do_preempt_user(struct pt_regs * regs)
 
 static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
 {
-	bool no_signal = false;
 	/*
 	 * In order to return to user mode, we need to have IRQs off with
 	 * none of EXIT_TO_USERMODE_LOOP_FLAGS set.  Several of these flags
@@ -167,16 +189,9 @@ static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
 		if (cached_flags & _TIF_UPROBE)
 			uprobe_notify_resume(regs);
 
-		if (atomic_read(&current_thread_info()->await_switch))
-                {
-                        do_preempt_user(regs);
-                        no_signal = true;
-                }
-
 		/* deal with pending signal delivery */
 		if (cached_flags & _TIF_SIGPENDING)
-			if (!no_signal) // you can fuck off and wait. we'll rekick the process later just in case.
-				do_signal(regs);
+			do_signal(regs);
 
 		if (cached_flags & _TIF_NOTIFY_RESUME) {
 			clear_thread_flag(TIF_NOTIFY_RESUME);
@@ -196,11 +211,6 @@ static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
 
 		if (!(cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS))
 			break;
-		
-		if (!(cached_flags & (EXIT_TO_USERMODE_LOOP_FLAGS & ~_TIF_SIGPENDING))) // Test to see if we could return if not for a signal
-			if (cached_flags & _TIF_SIGPENDING) // double check to ensure a signal is actually present (ignore previous statement. bah)
-				if (no_signal) // should we act dirty?
-					break;
 	}
 }
 
@@ -219,7 +229,9 @@ __visible inline void prepare_exit_to_usermode(struct pt_regs *regs)
 
 	cached_flags = READ_ONCE(ti->flags);
 
-	if (unlikely(cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS))
+	if (atomic_read(&ti->await_switch))
+		do_preempt_user(regs);
+	else if (unlikely(cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS))
 		exit_to_usermode_loop(regs, cached_flags);
 
 #ifdef CONFIG_COMPAT
