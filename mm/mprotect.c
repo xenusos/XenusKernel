@@ -390,7 +390,7 @@ fail:
 /*
  * pkey==-1 when doing a legacy mprotect()
  */
-int do_mprotect_pkey(struct task_struct * task, unsigned long start, size_t len,
+int do_mprotect_pkey_ex(struct mm_struct * mm, struct task_struct * task, unsigned long start, size_t len,
 		unsigned long prot, int pkey)
 {
 	unsigned long nstart, end, tmp, reqprot;
@@ -417,7 +417,7 @@ int do_mprotect_pkey(struct task_struct * task, unsigned long start, size_t len,
 
 	reqprot = prot;
 
-	if (down_write_killable(&task->mm->mmap_sem))
+	if (down_write_killable(&mm->mmap_sem))
 		return -EINTR;
 
 	/*
@@ -425,10 +425,10 @@ int do_mprotect_pkey(struct task_struct * task, unsigned long start, size_t len,
 	 * them use it here.
 	 */
 	error = -EINVAL;
-	if ((pkey != -1) && !mm_pkey_is_allocated(task->mm, pkey))
+	if ((pkey != -1) && !mm_pkey_is_allocated(mm, pkey))
 		goto out;
 
-	vma = find_vma(task->mm, start);
+	vma = find_vma(mm, start);
 	error = -ENOMEM;
 	if (!vma)
 		goto out;
@@ -507,8 +507,15 @@ int do_mprotect_pkey(struct task_struct * task, unsigned long start, size_t len,
 		prot = reqprot;
 	}
 out:
-	up_write(&task->mm->mmap_sem);
+	up_write(&mm->mmap_sem);
 	return error;
+}
+EXPORT_SYMBOL(do_mprotect_pkey_ex);
+
+int do_mprotect_pkey(struct task_struct * task, unsigned long start, size_t len,
+                unsigned long prot, int pkey)
+{
+	return do_mprotect_pkey_ex(task->mm, task, start, len, prot, pkey);
 }
 EXPORT_SYMBOL(do_mprotect_pkey);
 
